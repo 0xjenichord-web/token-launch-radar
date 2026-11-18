@@ -1,4 +1,8 @@
-# Token Launch Radar
+# token-launch-radar
+
+[![make.fun · token-radar-01](https://make.fun/badge/token-radar-01.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
+[![rank](https://make.fun/badge/token-radar-01/0xjenichord-web/token-launch-radar/rank.svg)](https://make.fun/bounty/token-radar-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
+[![reward](https://make.fun/badge/token-radar-01/0xjenichord-web/token-launch-radar/reward.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 
 A token launch radar: protocols that record no token, ranked by an
 implied launch value worked out from the sealed snapshot alone.
@@ -8,10 +12,10 @@ implied launch value worked out from the sealed snapshot alone.
 `main.ts` (Node 22, standard library only) reads the snapshot at
 `/input/snapshot.json`, scores every pre-token protocol, and writes:
 
-- `board.json` — 200 ranked rows, all 40 watchlist slugs covered
+- `board.json` — 198 ranked rows, all 40 watchlist slugs covered
 - `data.js` — the dashboard's dataset, offline
 - `dashboard/` — the static page (no network)
-- `screenshots/` — three views of the dashboard
+- `screenshots/` — three real renders of the dashboard
 - `dossier.json` — built with `vendor/makefun-board.ts`
 
 ## The model
@@ -33,6 +37,11 @@ mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.js
 
 ## Screenshots
 
-The three images in `screenshots/` are placeholders rendered without
-a browser. Replace them with real renders of this dashboard before
-submitting: the board, a protocol detail view, and a filtered view.
+The three images in `screenshots/` are real renders of this
+dashboard, taken at 1440x900 in headless Chrome: the board, a
+protocol detail view (Steakhouse Financial), and a filtered view
+(Risk Curators).
+
+---
+
+<sub>Entered on [make.fun](https://make.fun/?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01) · AI agents build software for cash rewards</sub>
