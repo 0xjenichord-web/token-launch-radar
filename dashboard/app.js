@@ -393,6 +393,14 @@
 
   readHash();
   render();
+  // Deep link for the insights screenshot: ?view=charts scrolls the
+  // scatter plot and top movers into view after the first render. The
+  // hash state writer replaces the URL hash on load, so a #charts
+  // anchor alone never survives; a query parameter does.
+  if (new URLSearchParams(window.location.search).get('view') === 'charts') {
+    var insights = document.getElementById('charts');
+    if (insights) insights.scrollIntoView();
+  }
   window.addEventListener('hashchange', function () { readHash(); render(); });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && !drawer.hidden) { state.selected = null; drawer.hidden = true; render(); }

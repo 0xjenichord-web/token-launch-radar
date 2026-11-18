@@ -15,7 +15,7 @@ implied launch value worked out from the sealed snapshot alone.
 - `board.json` — 198 ranked rows, all 40 watchlist slugs covered
 - `data.js` — the dashboard's dataset, offline
 - `dashboard/` — the static page (no network)
-- `screenshots/` — three real renders of the dashboard
+- `screenshots/` — four real renders of the dashboard
 - `dossier.json` — built with `vendor/makefun-board.ts`
 
 ## The model
@@ -39,10 +39,12 @@ mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.js
 
 ## Screenshots
 
-The three images in `screenshots/` are real renders of this
-dashboard, taken at 1440x900 in headless Chrome: the board, a
-protocol detail view (Steakhouse Financial), and a filtered view
-(Risk Curators).
+The four images in `screenshots/` are real renders of this
+dashboard, taken in headless Chrome: the board, a
+protocol detail view (Steakhouse Financial), a filtered view
+(Risk Curators), and the insights section below the board —
+the TVL-against-implied-value scatter plot and the top movers
+(`?view=charts` scrolls the page to that section).
 
 ---
 
