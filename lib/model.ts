@@ -68,10 +68,6 @@ export interface BoardRow {
   implied_value_usd: number;
   model: ModelBreakdown;
   farm_steps: string[];
-  /** Set when the name ends in a version marker: a fallback row, used
-   *  only to complete the board after every unversioned rankable
-   *  protocol is already on it. */
-  versioned_name?: boolean;
 }
 
 export interface RadarRow extends Omit<BoardRow, 'farm_steps'> {
@@ -323,22 +319,10 @@ export function buildBoard(snapshot: Snapshot): BoardRow[] {
     .sort((a, b) => b.scored.implied - a.scored.implied || b.p.tvl_usd - a.p.tvl_usd || (a.p.slug < b.p.slug ? -1 : 1))
     .slice(0, Math.max(0, BOARD_SIZE - chosen.size));
   for (const e of early) chosen.set(e.p.slug, e.p);
-  // Fallback, only if the rankable pool is short of 200 rows: the
-  // lowest-TVL versioned protocols (a V2/V3 of a real protocol, not a
-  // wrapped or bridged product), flagged on their rows. They sort by
-  // implied value like every other row, near the bottom.
-  const versioned = new Set<string>();
-  if (chosen.size < BOARD_SIZE) {
-    const fill = snapshot.protocols
-      .filter((p) => !chosen.has(p.slug) && isPreToken(p) && VERSIONED_NAME.test(p.name) && !/\b(wrapped|staked|staking)\b/i.test(p.name))
-      .filter((p) => p.category !== 'CEX' && p.category !== 'Bridge' && p.category !== 'Canonical Bridge' && p.category !== 'Liquid Staking' && p.category !== 'Liquid Restaking' && p.category !== 'Restaked BTC')
-      .sort((a, b) => a.tvl_usd - b.tvl_usd || (a.slug < b.slug ? -1 : 1))
-      .slice(0, BOARD_SIZE - chosen.size);
-    for (const p of fill) {
-      chosen.set(p.slug, p);
-      versioned.add(p.slug);
-    }
-  }
+  // No fallback: a versioned name (V2, v2, 2.0, ...) is a pool of
+  // another protocol, not a launch candidate, so it is never added
+  // just to reach 200 rows. The board is 198 rows instead — still
+  // well above the gate's 100-row minimum.
 
   const scored = [...chosen.values()].map((p) => ({ p, scored: scoreProtocol(p, snapshot.as_of, peers) }));
   scored.sort((a, b) => b.scored.implied - a.scored.implied || b.p.tvl_usd - a.p.tvl_usd || (a.p.slug < b.p.slug ? -1 : 1));
@@ -366,7 +350,6 @@ export function buildBoard(snapshot: Snapshot): BoardRow[] {
       implied_value_usd: implied,
       model: { ...s.scored.breakdown, tie_break: tieBreak },
       farm_steps: farmSteps(s.p, s.scored.age),
-      ...(versioned.has(s.p.slug) ? { versioned_name: true as const } : {}),
     };
   });
 }
