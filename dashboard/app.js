@@ -102,7 +102,7 @@
       out += '<circle cx="' + px(Math.log10(r.tvl_usd)).toFixed(1) + '" cy="' + py(Math.log10(r.implied_value_usd)).toFixed(1) + '" r="3" class="scatter-dot' + (r.watchlist ? ' watch' : '') + '"><title>' + escHtml(r.name + ' — TVL ' + fmtUsd(r.tvl_usd) + ', implied ' + fmtUsd(r.implied_value_usd)) + '</title></circle>';
     });
     out += '</svg>';
-    var wrap = el('div', { 'class': 'panel chart-panel' });
+    var wrap = el('div', { 'class': 'panel chart-panel', id: 'charts' });
     wrap.innerHTML = out;
     wrap.appendChild(el('div', { 'class': 'legend' },
       el('span', { 'class': 'legend-item' }, el('span', { 'class': 'dot watch' }), 'Watchlist'),
@@ -335,10 +335,10 @@
     shell.appendChild(top);
     shell.appendChild(lede);
     shell.appendChild(categoryChart());
-    shell.appendChild(scatterChart());
-    shell.appendChild(moversPanel());
     shell.appendChild(controls);
     shell.appendChild(panel);
+    shell.appendChild(scatterChart());
+    shell.appendChild(moversPanel());
     shell.appendChild(model);
     app.appendChild(shell);
     app.setAttribute('aria-busy', 'false');
