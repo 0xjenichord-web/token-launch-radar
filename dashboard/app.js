@@ -225,7 +225,7 @@
       el('h2', null, 'How the value is worked out'),
       el('p', { 'class': 'formula' }, 'implied = TVL x peer multiple x growth factor x age factor x breadth factor'),
       el('p', null, DATA.model_note),
-      el('p', null, 'Overall peer multiple: ' + DATA.overall_multiple + '. A category multiple shrinks its own median toward the overall median, (n x category median + 3 x overall median) / (n + 3), where n is the category tokenised peer count; a category with no peers uses the overall median. Growth is the seven-day TVL change, clipped to -30%..+30%. Age is days since first tracked, to the snapshot date.'));
+      el('p', null, 'Overall peer multiple: ' + DATA.overall_multiple + '. A category multiple shrinks its own median toward the overall median, (n x category median + 3 x overall median) / (n + 3), where n is the category tokenised peer count, used only when n is at least 3; a category with fewer peers uses the overall median. Growth is the seven-day TVL change, clipped to -30%..+30%. Age is days since first tracked, to the snapshot date.'));
 
     shell.appendChild(top);
     shell.appendChild(lede);
