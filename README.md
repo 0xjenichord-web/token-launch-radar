@@ -21,10 +21,12 @@ implied launch value worked out from the sealed snapshot alone.
 ## The model
 
 Implied value = TVL x peer multiple x growth factor x age factor x
-chain-breadth factor, where the peer multiple is the median
-mcap/TVL of tokenised protocols in the same category (overall median
-when fewer than three peers exist). Growth is the seven-day TVL
-change clipped to -30%..+30%. Age is days since first tracked.
+chain-breadth factor, where the peer multiple shrinks the category
+median mcap/TVL of tokenised protocols toward the overall median:
+(n x category median + 3 x overall median) / (n + 3), with n the
+category's tokenised peer count; a category with no peers uses the
+overall median. Growth is the seven-day TVL change clipped to
+-30%..+30%. Age is days since first tracked.
 No protocol name is special-cased, and a protocol that records no
 token is never described as having no token: that is not a
 prediction that a token will launch.

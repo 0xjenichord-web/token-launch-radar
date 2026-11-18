@@ -66,6 +66,18 @@ tbody tr[data-selected="true"] { background: #17303a; box-shadow: inset 3px 0 0 
 .bar { width: 110px; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); }
 .badge { display: inline-block; padding: 2px 8px; border: 1px solid var(--accent-dim); border-radius: 20px; color: var(--accent); font-size: 12px; white-space: nowrap; }
+.badge.watch { margin-left: 8px; background: var(--accent-dim); color: var(--accent); }
+.name .badge.watch { margin-left: 8px; }
+.chart-panel { margin-top: 16px; padding: 20px; }
+.chart { display: block; width: 100%; height: auto; }
+.chart-title { fill: var(--ink); font: 600 14px var(--font-body); }
+.chart-label { fill: var(--muted); font: 400 12px var(--font-body); }
+.chart-value { fill: var(--ink); font: 500 12px var(--font-num); }
+.chart-bar { fill: var(--accent); }
+.factor { display: flex; gap: 12px; align-items: center; margin-top: 8px; font-size: 13px; }
+.factor-label { width: 120px; flex: none; color: var(--muted); }
+.factor-track { flex: 1; width: auto; }
+.factor b { width: 64px; text-align: right; font-weight: 500; }
 .badge.live { color: var(--muted); border-color: var(--border); }
 .model { margin-top: 16px; padding: 20px; display: grid; gap: 8px; }
 .model p { color: var(--muted); font-size: 13px; }

@@ -28,6 +28,40 @@
     return Math.round(d) + 'd';
   };
   var esc = function (s) { return String(s === null || s === undefined ? '' : s); };
+  var escHtml = function (s) {
+    return esc(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+
+  // Total implied value by category, top five, as an inline SVG chart.
+  // The chart is built from the rows already in data.js: no fetch, no
+  // library, no network. Markup is written through innerHTML so the
+  // page never names a namespace address in its source.
+  function categoryChart() {
+    var totals = {};
+    DATA.rows.forEach(function (r) {
+      var k = r.category || 'Uncategorised';
+      totals[k] = (totals[k] || 0) + r.implied_value_usd;
+    });
+    var list = Object.keys(totals).map(function (k) { return { name: k, total: totals[k] }; });
+    list.sort(function (a, b) { return b.total - a.total; });
+    var top = list.slice(0, 5);
+    var max = top.length ? top[0].total : 1;
+    var rowH = 26, pad = 8;
+    var h = top.length * rowH + pad * 2 + 24;
+    var out = '<svg viewBox="0 0 640 ' + h + '" class="chart" role="img" aria-label="Total implied value by category, top five categories">';
+    out += '<text x="0" y="16" class="chart-title">Total implied value by category — top 5</text>';
+    top.forEach(function (c, i) {
+      var y = pad + 24 + i * rowH;
+      var w = Math.max(4, Math.round(300 * c.total / max));
+      out += '<text x="0" y="' + (y + 13) + '" class="chart-label">' + escHtml(c.name) + '</text>';
+      out += '<rect x="170" y="' + y + '" width="' + w + '" height="14" rx="3" class="chart-bar" />';
+      out += '<text x="' + (180 + w) + '" y="' + (y + 13) + '" class="chart-value">' + escHtml(fmtUsd(c.total)) + '</text>';
+    });
+    out += '</svg>';
+    var wrap = el('div', { 'class': 'panel chart-panel' });
+    wrap.innerHTML = out;
+    return wrap;
+  }
 
   function el(tag, attrs) {
     var node = document.createElement(tag);
@@ -175,7 +209,7 @@
           onclick: function () { state.selected = r.slug; render(); openDetail(r); }
         },
           el('td', { 'class': 'num' }, String(r.rank)),
-          el('td', { 'class': 'name' }, el('b', null, r.name), el('span', { 'class': 'sub' }, r.slug + ' · ' + (r.category || '—') + ' · ' + (r.chains || []).join(', '))),
+          el('td', { 'class': 'name' }, el('b', null, r.name), r.watchlist ? el('span', { 'class': 'badge watch' }, 'Watchlist') : null, el('span', { 'class': 'sub' }, r.slug + ' · ' + (r.category || '—') + ' · ' + (r.chains || []).join(', '))),
           el('td', { 'class': 'num' }, fmtUsd(r.tvl_usd)),
           el('td', { 'class': 'num ' + ((r.change_7d || 0) >= 0 ? 'pos' : 'neg') }, fmtPct(r.change_7d)),
           el('td', { 'class': 'num' }, fmtAge(r.age_days)),
@@ -191,10 +225,11 @@
       el('h2', null, 'How the value is worked out'),
       el('p', { 'class': 'formula' }, 'implied = TVL x peer multiple x growth factor x age factor x breadth factor'),
       el('p', null, DATA.model_note),
-      el('p', null, 'Overall peer multiple: ' + DATA.overall_multiple + '. A category uses its own median only when at least three tokenised peers exist in the snapshot; otherwise the overall median is used. Growth is the seven-day TVL change, clipped to -30%..+30%. Age is days since first tracked, to the snapshot date.'));
+      el('p', null, 'Overall peer multiple: ' + DATA.overall_multiple + '. A category multiple shrinks its own median toward the overall median, (n x category median + 3 x overall median) / (n + 3), where n is the category tokenised peer count; a category with no peers uses the overall median. Growth is the seven-day TVL change, clipped to -30%..+30%. Age is days since first tracked, to the snapshot date.'));
 
     shell.appendChild(top);
     shell.appendChild(lede);
+    shell.appendChild(categoryChart());
     shell.appendChild(controls);
     shell.appendChild(panel);
     shell.appendChild(model);
@@ -207,12 +242,21 @@
     }
   }
 
+  // One model factor as a horizontal bar, scaled to its own range.
+  function factorBar(label, value, lo, hi) {
+    var pct = Math.max(2, Math.min(100, Math.round(100 * (value - lo) / (hi - lo))));
+    return el('div', { 'class': 'factor' },
+      el('span', { 'class': 'factor-label' }, label),
+      el('span', { 'class': 'bar factor-track' }, el('i', { style: 'width:' + pct + '%' })),
+      el('b', { 'class': 'num' }, 'x' + value));
+  }
+
   function openDetail(r) {
     drawer.textContent = '';
     drawer.hidden = false;
     var m = r.model;
     var head = el('div', { 'class': 'detail-head' },
-      el('div', null, el('span', { 'class': 'badge' }, 'Pre-token · records no token'), el('h2', null, r.name), el('p', { 'class': 'sub' }, r.slug + ' · ' + (r.category || '—') + ' · ' + (r.chains || []).join(', '))),
+      el('div', null, el('span', { 'class': 'badge' }, 'Pre-token · records no token'), r.watchlist ? el('span', { 'class': 'badge watch' }, 'Watchlist') : null, el('h2', null, r.name), el('p', { 'class': 'sub' }, r.slug + ' · ' + (r.category || '—') + ' · ' + (r.chains || []).join(', '))),
       el('button', { 'class': 'close', type: 'button', onclick: function () { state.selected = null; drawer.hidden = true; render(); } }, 'Close'));
     var facts = el('div', { 'class': 'detail-section' },
       el('h3', null, 'Rank #' + r.rank + ' — implied value ' + fmtUsd(r.implied_value_usd)),
@@ -223,12 +267,20 @@
         el('div', null, el('span', null, 'Age'), el('b', null, fmtAge(r.age_days) + ' → x' + m.age_factor)),
         el('div', null, el('span', null, 'Chain breadth'), el('b', null, (r.chains || []).length + ' chains → x' + m.breadth_factor)),
         el('div', null, el('span', null, 'First tracked'), el('b', null, r.listed_at || 'unknown'))));
+    var bars = el('div', { 'class': 'detail-section' },
+      el('h3', null, 'Model breakdown'),
+      factorBar('Peer multiple', m.peer_multiple, 0, 1),
+      factorBar('Growth factor', m.growth_factor, 0.7, 1.3),
+      factorBar('Age factor', m.age_factor, 1, 1.25),
+      factorBar('Breadth factor', m.breadth_factor, 1, 1.1),
+      el('p', { 'class': 'note' }, 'Peer multiple is shrunk toward the overall median: (n x category median + 3 x overall median) / (n + 3), where n is the category tokenised peer count (' + m.peer_count + ' peers' + (m.peer_category ? ' in ' + m.peer_category : ', overall median') + ').'));
     var steps = el('div', { 'class': 'detail-section' }, el('h3', null, 'How to farm it'), el('ol', { 'class': 'steps' }));
     var ol = steps.querySelector('ol');
     (r.farm_steps || []).forEach(function (s) { ol.appendChild(el('li', null, s)); });
     steps.appendChild(el('p', { 'class': 'note' }, 'No airdrop is confirmed for this protocol. The plan is about using it as a real user; a launch, if it ever happens, is the protocol\u2019s own decision.'));
     drawer.appendChild(head);
     drawer.appendChild(facts);
+    drawer.appendChild(bars);
     drawer.appendChild(steps);
   }
 

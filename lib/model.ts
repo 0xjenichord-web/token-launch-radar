@@ -6,9 +6,15 @@
 // It is a claim about the snapshot's own figures, not a prediction that
 // any token will launch, and never a hand-written list of names.
 //
-//   peer multiple  = median(mcap_usd / tvl_usd) over tokenised protocols
-//                    in the same category (n >= 3), else the overall
-//                    median across all tokenised protocols.
+//   peer multiple  = shrinkage toward the overall median:
+//                    (n * category_median + 3 * overall_median) / (n + 3),
+//                    where n is the category's tokenised peer count and
+//                    category_median is the median mcap/TVL of tokenised
+//                    protocols in that category; a category with no peers
+//                    (n = 0) uses the overall median outright. The
+//                    shrinkage keeps a thin category from swinging the
+//                    value on two or three peers, while a well-populated
+//                    category still mostly speaks for itself.
 //   base           = tvl_usd * peer multiple
 //   growth factor  = 1 + clip(change_7d, -30, +30) / 100
 //   age factor     = 1 + 0.05 * log10(1 + age_days / 30), capped at 1.25
@@ -65,6 +71,7 @@ export interface BoardRow {
   listed_at: string | null;
   age_days: number | null;
   token_status: 'pre-token';
+  watchlist: boolean;
   implied_value_usd: number;
   model: ModelBreakdown;
   farm_steps: string[];
@@ -99,7 +106,7 @@ export interface RadarData {
   live: LiveRow[];
 }
 
-export const MODEL_VERSION = 'peer-multiple-v1';
+export const MODEL_VERSION = 'peer-multiple-v2';
 export const BOARD_SIZE = 200;
 export const LIVE_SIZE = 24;
 
@@ -160,8 +167,11 @@ export function isRankable(p: SnapshotProtocol): boolean {
 
 /**
  * Peer multiples, computed from the snapshot alone: for every category,
- * the median mcap/TVL of its tokenised protocols; plus the overall
- * median used when a category has fewer than three tokenised peers.
+ * the median mcap/TVL of its tokenised protocols, plus the overall
+ * median. A category's multiple is shrunk toward the overall median,
+ * (n * category_median + 3 * overall_median) / (n + 3), so a thin
+ * category cannot swing a value on one or two peers; a category with
+ * no tokenised peers uses the overall median outright.
  */
 export function peerMultiples(protocols: SnapshotProtocol[]): {
   byCategory: Map<string, { multiple: number; count: number }>;
@@ -192,8 +202,9 @@ export function scoreProtocol(
 ): { implied: number; breakdown: ModelBreakdown; age: number | null } {
   const age = ageDays(asOf, p.listed_at);
   const peer = peers.byCategory.get(p.category ?? 'Uncategorised');
-  const usePeer = peer !== undefined && peer.count >= 3;
-  const multiple = usePeer ? peer!.multiple : peers.overall;
+  const count = peer !== undefined ? peer.count : 0;
+  const multiple =
+    count === 0 ? peers.overall : (count * peer!.multiple + 3 * peers.overall) / (count + 3);
   const growthPct = Math.min(30, Math.max(-30, finite(p.change_7d, 0)));
   const growthFactor = 1 + growthPct / 100;
   const ageFactor = age === null ? 1 : Math.min(1.25, 1 + 0.05 * Math.log10(1 + age / 30));
@@ -204,8 +215,8 @@ export function scoreProtocol(
     age,
     breakdown: {
       peer_multiple: round4(multiple),
-      peer_category: usePeer ? p.category : null,
-      peer_count: usePeer ? peer!.count : 0,
+      peer_category: count === 0 ? null : p.category,
+      peer_count: count,
       growth_pct: growthPct,
       growth_factor: round4(growthFactor),
       age_factor: round4(ageFactor),
@@ -347,6 +358,7 @@ export function buildBoard(snapshot: Snapshot): BoardRow[] {
       listed_at: s.p.listed_at,
       age_days: s.scored.age,
       token_status: 'pre-token' as const,
+      watchlist: snapshot.watchlist.includes(s.p.slug),
       implied_value_usd: implied,
       model: { ...s.scored.breakdown, tie_break: tieBreak },
       farm_steps: farmSteps(s.p, s.scored.age),
@@ -382,7 +394,7 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     floor_usd: snapshot.floor_usd,
     model_version: MODEL_VERSION,
     model_note:
-      'Implied value = TVL x peer multiple (median mcap/TVL of tokenised protocols in the same category, overall median when fewer than 3 peers) x growth factor x age factor x chain-breadth factor. No protocol name is special-cased. A protocol records no token in the snapshot; that is not a prediction it will launch one.',
+      'Implied value = TVL x peer multiple x growth factor x age factor x chain-breadth factor. The peer multiple shrinks the category median mcap/TVL of tokenised protocols toward the overall median: (n x category median + 3 x overall median) / (n + 3), where n is the category tokenised peer count; a category with no peers uses the overall median. No protocol name is special-cased. A protocol records no token in the snapshot; that is not a prediction it will launch one.',
     overall_multiple: round4(peers.overall),
     watchlist_size: snapshot.watchlist.length,
     board_size: board.length,
