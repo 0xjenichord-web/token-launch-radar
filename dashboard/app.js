@@ -10,7 +10,7 @@
   var drawer = document.getElementById('detail');
   if (!DATA || !app) return;
 
-  var state = { q: '', category: 'all', chain: 'all', minTvl: 0, tab: 'pre-token', sort: 'implied', dir: -1, selected: null };
+  var state = { q: '', category: 'all', chain: 'all', minTvl: 0, tab: 'pre-token', sort: 'implied', dir: -1, selected: null, watchlistOnly: false };
   var fmtUsd = function (n) {
     if (n === null || n === undefined || !isFinite(n)) return 'n/a';
     if (Math.abs(n) >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
@@ -21,6 +21,14 @@
   var fmtPct = function (n) {
     if (n === null || n === undefined || !isFinite(n)) return 'n/a';
     return (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+  };
+  // Short axis labels for the scatter plot's powers of ten.
+  var fmtAxis = function (n) {
+    if (n >= 1e12) return '$' + (n / 1e12) + 'T';
+    if (n >= 1e9) return '$' + (n / 1e9) + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6) + 'M';
+    if (n >= 1e3) return '$' + (n / 1e3) + 'K';
+    return '$' + n;
   };
   var fmtAge = function (d) {
     if (d === null || d === undefined) return 'unknown';
@@ -63,6 +71,98 @@
     return wrap;
   }
 
+  // Scatter plot of TVL against implied value, one dot per board row,
+  // log scales on both axes. Built from the rows already in data.js:
+  // no fetch, no library, no network. Markup is written through
+  // innerHTML so the page never names a namespace address in its source.
+  function scatterChart() {
+    var rows = DATA.rows.filter(function (r) { return r.tvl_usd > 0 && r.implied_value_usd > 0; });
+    var W = 640, H = 340, ml = 72, mr = 16, mt = 28, mb = 44;
+    var xs = rows.map(function (r) { return Math.log10(r.tvl_usd); });
+    var ys = rows.map(function (r) { return Math.log10(r.implied_value_usd); });
+    var x0 = Math.floor(Math.min.apply(null, xs)), x1 = Math.ceil(Math.max.apply(null, xs));
+    var y0 = Math.floor(Math.min.apply(null, ys)), y1 = Math.ceil(Math.max.apply(null, ys));
+    var px = function (v) { return ml + (v - x0) / (x1 - x0) * (W - ml - mr); };
+    var py = function (v) { return H - mb - (v - y0) / (y1 - y0) * (H - mt - mb); };
+    var out = '<svg viewBox="0 0 640 340" class="chart scatter" role="img" aria-label="Scatter plot of TVL against implied value, both axes logarithmic, one dot per protocol">';
+    out += '<text x="0" y="16" class="chart-title">TVL against implied value — both axes logarithmic</text>';
+    var gx, gy;
+    for (gx = x0; gx <= x1; gx++) {
+      out += '<line x1="' + px(gx).toFixed(1) + '" y1="' + (H - mb) + '" x2="' + px(gx).toFixed(1) + '" y2="' + mt + '" class="scatter-grid" />';
+      out += '<text x="' + px(gx).toFixed(1) + '" y="' + (H - mb + 16) + '" class="chart-label scatter-tick">' + escHtml(fmtAxis(Math.pow(10, gx))) + '</text>';
+    }
+    for (gy = y0; gy <= y1; gy++) {
+      out += '<line x1="' + ml + '" y1="' + py(gy).toFixed(1) + '" x2="' + (W - mr) + '" y2="' + py(gy).toFixed(1) + '" class="scatter-grid" />';
+      out += '<text x="' + (ml - 8) + '" y="' + (py(gy) + 4).toFixed(1) + '" class="chart-label scatter-tick-y">' + escHtml(fmtAxis(Math.pow(10, gy))) + '</text>';
+    }
+    out += '<text x="' + ((W - ml - mr) / 2 + ml).toFixed(1) + '" y="' + (H - 6) + '" class="chart-label scatter-axis-label">TVL (log scale)</text>';
+    var midY = ((H - mt - mb) / 2 + mt).toFixed(1);
+    out += '<text x="14" y="' + midY + '" class="chart-label scatter-axis-label" transform="rotate(-90 14 ' + midY + ')">Implied value (log scale)</text>';
+    rows.forEach(function (r) {
+      out += '<circle cx="' + px(Math.log10(r.tvl_usd)).toFixed(1) + '" cy="' + py(Math.log10(r.implied_value_usd)).toFixed(1) + '" r="3" class="scatter-dot' + (r.watchlist ? ' watch' : '') + '"><title>' + escHtml(r.name + ' — TVL ' + fmtUsd(r.tvl_usd) + ', implied ' + fmtUsd(r.implied_value_usd)) + '</title></circle>';
+    });
+    out += '</svg>';
+    var wrap = el('div', { 'class': 'panel chart-panel' });
+    wrap.innerHTML = out;
+    wrap.appendChild(el('div', { 'class': 'legend' },
+      el('span', { 'class': 'legend-item' }, el('span', { 'class': 'dot watch' }), 'Watchlist'),
+      el('span', { 'class': 'legend-item' }, el('span', { 'class': 'dot' }), 'Other board rows'),
+      el('span', { 'class': 'note' }, rows.length + ' dots, one per board row. Both axes are base-10 logarithmic, so a step right or up is ten times more.')));
+    return wrap;
+  }
+
+  // Top movers: the five board rows with the largest seven-day TVL
+  // growth and the five with the smallest. Rows with no seven-day
+  // change in the snapshot are left out. Clicking a row opens its detail.
+  function moversPanel() {
+    var withGrowth = DATA.rows.filter(function (r) { return r.change_7d !== null && r.change_7d !== undefined && isFinite(r.change_7d); });
+    var sorted = withGrowth.slice().sort(function (a, b) { return b.change_7d - a.change_7d; });
+    var top = sorted.slice(0, 5);
+    var bottom = sorted.slice(-5).reverse();
+    function moverList(list, heading) {
+      var box = el('div', null, el('h3', null, heading));
+      list.forEach(function (r) {
+        box.appendChild(el('div', { 'class': 'mover', onclick: function () { state.selected = r.slug; render(); openDetail(r); } },
+          el('span', { 'class': 'num' }, '#' + r.rank),
+          el('span', { 'class': 'mover-name' }, r.name),
+          el('span', { 'class': 'num ' + (r.change_7d >= 0 ? 'pos' : 'neg') }, fmtPct(r.change_7d)),
+          el('span', { 'class': 'num' }, fmtUsd(r.implied_value_usd))));
+      });
+      return box;
+    }
+    var wrap = el('div', { 'class': 'panel movers-panel' });
+    wrap.appendChild(el('h2', null, 'Top movers — 7-day TVL growth'));
+    var grid = el('div', { 'class': 'movers' });
+    grid.appendChild(moverList(top, 'Biggest gains'));
+    grid.appendChild(moverList(bottom, 'Biggest falls'));
+    wrap.appendChild(grid);
+    wrap.appendChild(el('p', { 'class': 'note' }, withGrowth.length + ' of ' + DATA.rows.length + ' board rows carry a seven-day change in the snapshot; the rest are left out. Click a row to open its detail.'));
+    return wrap;
+  }
+
+  // Download the currently filtered board rows as a CSV, built
+  // entirely in the browser from the rows already in data.js.
+  function downloadCsv() {
+    var rows = filteredRows();
+    var cell = function (v) {
+      var s = String(v === null || v === undefined ? '' : v);
+      return (/[",\n]/.test(s)) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    var lines = ['rank,slug,name,category,tvl_usd,change_7d,implied_value_usd,watchlist'];
+    rows.forEach(function (r) {
+      lines.push([r.rank, r.slug, r.name, r.category || '', r.tvl_usd, r.change_7d, r.implied_value_usd, r.watchlist ? 'yes' : 'no'].map(cell).join(','));
+    });
+    var blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'token-launch-radar.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
   function el(tag, attrs) {
     var node = document.createElement(tag);
     if (attrs) Object.keys(attrs).forEach(function (k) {
@@ -87,6 +187,7 @@
     if (p.get('category')) state.category = p.get('category');
     if (p.get('chain')) state.chain = p.get('chain');
     if (p.get('tab')) state.tab = p.get('tab');
+    if (p.get('watchlist') === '1') state.watchlistOnly = true;
     if (p.get('p')) state.selected = p.get('p');
   }
   function writeHash() {
@@ -95,6 +196,7 @@
     if (state.category !== 'all') p.set('category', state.category);
     if (state.chain !== 'all') p.set('chain', state.chain);
     if (state.tab !== 'pre-token') p.set('tab', state.tab);
+    if (state.watchlistOnly) p.set('watchlist', '1');
     if (state.selected) p.set('p', state.selected);
     var h = p.toString();
     history.replaceState(null, '', h ? '#' + h : window.location.pathname);
@@ -110,6 +212,7 @@
   function filteredRows() {
     var q = state.q.trim().toLowerCase();
     var rows = DATA.rows.filter(function (r) {
+      if (state.watchlistOnly && !r.watchlist) return false;
       if (state.category !== 'all' && r.category !== state.category) return false;
       if (state.chain !== 'all' && (r.chains || []).indexOf(state.chain) < 0) return false;
       if (r.tvl_usd < state.minTvl) return false;
@@ -217,7 +320,9 @@
         body.appendChild(tr);
       });
       panel.appendChild(el('div', { 'class': 'table-wrap' }, el('table', null, el('thead', null, head), body)));
-      if (rows.length === 0) panel.appendChild(el('div', { 'class': 'empty' }, el('h2', null, 'No protocols match'), el('p', null, 'Clear the search or widen the filters.'), el('button', { 'class': 'button', type: 'button', onclick: function () { state.q = ''; state.category = 'all'; state.chain = 'all'; state.minTvl = 0; render(); } }, 'Clear filters')));
+      if (rows.length === 0) panel.appendChild(el('div', { 'class': 'empty' }, el('h2', null, 'No protocols match'), el('p', null, 'Clear the search or widen the filters.'), el('button', { 'class': 'button', type: 'button', onclick: function () { state.q = ''; state.category = 'all'; state.chain = 'all'; state.minTvl = 0; state.watchlistOnly = false; render(); } }, 'Clear filters')));
+      controls.appendChild(el('button', { type: 'button', 'class': 'toggle', 'aria-pressed': String(state.watchlistOnly), onclick: function () { state.watchlistOnly = !state.watchlistOnly; render(); } }, 'Watchlist only'));
+      controls.appendChild(el('button', { type: 'button', 'class': 'button', onclick: function () { downloadCsv(); } }, 'Download CSV'));
       controls.appendChild(el('span', { 'class': 'count' }, rows.length + ' of ' + DATA.rows.length + ' protocols'));
     }
 
@@ -230,6 +335,8 @@
     shell.appendChild(top);
     shell.appendChild(lede);
     shell.appendChild(categoryChart());
+    shell.appendChild(scatterChart());
+    shell.appendChild(moversPanel());
     shell.appendChild(controls);
     shell.appendChild(panel);
     shell.appendChild(model);
